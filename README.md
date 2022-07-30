@@ -8,4 +8,4 @@ https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32
      cmake -G "MinGW Makefiles" .. OR cmake -G -DEXAMPLE=ON -G "MinGW Makefiles" ..
 ```
 
-## NOTE: Always run the executable as admins , otherwise you might experience WinAPI Error-5 
+### NOTE: Always run the executable as admins , otherwise you might experience WinAPI Error-5 
