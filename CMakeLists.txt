@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 project(RW_NFS)
+option(EXAMPLE "EXAMPLE IS DISABLED" OFF)
 add_library(   
     rwnfs
         STATIC
@@ -12,5 +13,7 @@ target_include_directories(
     ${PROJECT_SOURCE_DIR}/include/
 )
 
-add_executable(main ${PROJECT_SOURCE_DIR}/main.cpp )
+if(EXAMPLE)
+add_executable(main ${PROJECT_SOURCE_DIR}/example/main.cpp)
 target_link_libraries(main PUBLIC rwnfs)
+endif(EXAMPLE)

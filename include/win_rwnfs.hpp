@@ -1,21 +1,26 @@
 #ifndef     ___WIN_RWNFS
 #define     ___WIN_RWNFS
 
-#include <fileapi.h>
-#include <Windows.h>
-
-
+#define UNICODE
+#include <windows.h>
+#include <stdio.h>
+#include <string>
+#include <winioctl.h>
+#include <Shlobj.h>
 class WinRWNFS
 {
     private:
-        static HANDLE file;
-        static LPCWSTR filename;
+        static HANDLE hDevice;
+        static LARGE_INTEGER pos;
+        static DWORD cnt, wcnt;
+        static BOOL bResult;
+        static char   dev_name[64];
+        static DWORD  BytesReturned;
+        static VOLUME_DISK_EXTENTS vde;
     public:
-        static void setPath         (LPCWSTR path);
-        static void createFile      (LPCSTR path);
-        static void writeByteToDrive(char data);
-        static void writePageToDrive(char * data);
-        static void readDatafromFile(void);
+        static int drive_open(char *drive_name);    
+        static int drive_write(unsigned int sec, unsigned int num_secs, char *buf);
+        static int drive_read(unsigned int sec, unsigned int num_secs, char *buf);
 };
 
 #endif     //___WIN_RWNFSs

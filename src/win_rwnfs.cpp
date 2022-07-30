@@ -1,68 +1,117 @@
 #include <win_rwnfs.hpp>
 #include <iostream>
 
-HANDLE WinRWNFS::file;
-LPCWSTR WinRWNFS::filename=NULL;
+HANDLE WinRWNFS::hDevice;
+LARGE_INTEGER WinRWNFS::pos;
+DWORD WinRWNFS::cnt, WinRWNFS::wcnt;
+BOOL WinRWNFS::bResult;
+char   WinRWNFS::dev_name[64];
+DWORD  WinRWNFS::BytesReturned;
+VOLUME_DISK_EXTENTS WinRWNFS::vde;
 
-void WinRWNFS::setPath(LPCWSTR path)
-{   
-    WinRWNFS::filename = path; 
-    return;
+ int WinRWNFS::drive_open(char *drive_name) 
+ {
+     sprintf(dev_name, "\\\\.\\%s", drive_name);
+     hDevice = CreateFileA(dev_name,                              // Drive to open
+                          GENERIC_READ | GENERIC_WRITE,          // Access to the drive
+                          FILE_SHARE_READ | FILE_SHARE_WRITE,    // Share mode
+                          NULL,                                  // Security
+                          OPEN_EXISTING,                         // Disposition
+                          0,                                     // no file attributes
+                          NULL);
+    
+     if (hDevice == INVALID_HANDLE_VALUE) {
+         printf("Can't open the drive %s (err = %d).\n", drive_name, GetLastError());
+         return(-1);
+     }
+    
+     bResult = DeviceIoControl(hDevice, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, 
+                               NULL, 0, &vde, sizeof(vde), &BytesReturned, NULL);
+     if (!bResult) {
+         printf("Failed to get physical disk name (err = %d).\n", GetLastError());
+         return(-1);
+     }
+        
+     CloseHandle(hDevice);
+     sprintf(dev_name, "\\\\.\\PhysicalDrive%d", vde.Extents[0].DiskNumber);
+        
+     hDevice = CreateFileA(dev_name,                              // Drive to open
+                          GENERIC_READ | GENERIC_WRITE,          // Access to the drive
+                          FILE_SHARE_READ | FILE_SHARE_WRITE,    // Share mode
+                          NULL,                                  // Security
+                          OPEN_EXISTING,                         // Disposition
+                          0,                                     // no file attributes
+                          NULL);
+    
+     if (hDevice == INVALID_HANDLE_VALUE) {
+         printf("Can't open the disk %s (err = %d).\n", dev_name, GetLastError());
+         return(-1);
+     }
+    
+     bResult = DeviceIoControl(hDevice, FSCTL_LOCK_VOLUME, 
+                               NULL, 0, NULL, 0, &BytesReturned, NULL);
+     if (!bResult) {
+         printf("Failed to lock volume (err = %d).\n", GetLastError());
+         return(-1);
+     }
+    
+     bResult = DeviceIoControl(hDevice, FSCTL_DISMOUNT_VOLUME, 
+                               NULL, 0, NULL, 0, &BytesReturned, NULL);
+     if (!bResult) {
+         printf("Failed to dismount volume (err = %d).\n", GetLastError());
+         return(-1);
+     }
+        
+     return(0);
+ }
+
+int WinRWNFS::drive_write(unsigned int sec, unsigned int num_secs, char *buf)
+{
+  pos={};
+  cnt=0, wcnt=0;
+  bResult=false;
+
+  pos.QuadPart = ((LONGLONG)sec) << 9; // assume 512-byte sector
+  cnt = ((DWORD)num_secs) << 9;
+
+  bResult = SetFilePointerEx(hDevice, pos, NULL, FILE_BEGIN);
+  if (!bResult)
+  {
+    printf("SetFilePointerEx() failed (err = %d).\n", GetLastError());
+    return (-1);
+  }
+
+  bResult = WriteFile(hDevice, buf, cnt, &wcnt, NULL);
+  if (!bResult || cnt != wcnt)
+  {
+    printf("WriteFile() failed (err = %d).\n", GetLastError());
+    return (-1);
+  }
+
+  return (0);
 }
 
-void WinRWNFS::createFile(LPCSTR path)
+int WinRWNFS::drive_read(unsigned int sec, unsigned int num_secs, char *buf)
 {
-    file=CreateFile(
-        "\\\\.\\D:",
-        GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE, 
-        NULL, 
-        OPEN_EXISTING, 
-        FILE_FLAG_NO_BUFFERING | FILE_FLAG_RANDOM_ACCESS, 
-        NULL);
+  pos={};
+  cnt=0, wcnt=0;
+  bResult=false;
+  pos.QuadPart = ((LONGLONG)sec) << 9; // assume 512-byte sector
+  cnt = ((DWORD)num_secs) << 9;
 
-    if(file == INVALID_HANDLE_VALUE)
-    {
-        std::cout<<"error";
-    }
-    char buffer[512] = { 0 };
-    DWORD bytesWritten;
-    int cond= WriteFile(file, buffer, 512, &bytesWritten, NULL); 
-    std::cout<<cond<<"ending this"<<std::endl;
-    if(cond!= TRUE)
-    {
-        DWORD lastError = GetLastError();
-        std::cout<<"Error"<<lastError<<std::endl;
-        CloseHandle(file);
-        return;
-    }
-} 
+  bResult = SetFilePointerEx(hDevice, pos, NULL, FILE_BEGIN);
+  if (!bResult)
+  {
+    printf("SetFilePointerEx() failed (err = %d).\n", GetLastError());
+    return (-1);
+  }
 
+  bResult = ReadFile(hDevice, buf, cnt, &wcnt, NULL);
+  if (!bResult || cnt != wcnt)
+  {
+    printf("ReadFile() failed (err = %d).\n", GetLastError());
+    return (-1);
+  }
 
-void WinRWNFS::writeByteToDrive(char data)
-{   
-    DWORD bytesWritten;
-    std::cout<<"Write"<<WriteFile(WinRWNFS::file, (LPCVOID)data, sizeof(char), &bytesWritten, NULL);
-    return;
-}
-void WinRWNFS::writePageToDrive(char * data)
-{
-    DWORD bytesWritten;
-    std::cout<<"Write"<<WriteFile(WinRWNFS::file, (LPCVOID)data, sizeof(char), &bytesWritten, NULL);
-    return;
-}
-
-void  WinRWNFS::readDatafromFile(void)
-{
-    if (file != INVALID_HANDLE_VALUE)
-    {
-        char buffer[512];
-        DWORD readBytes = 0;
-        bool errro=ReadFile(file, buffer, sizeof(buffer), &readBytes, NULL);
-        /* .. */
-        CloseHandle(file);
-        std::cout<<"buffer empty"<<errro<<buffer<<std::endl;
-    }
-
-    return;
+  return (0);
 }
